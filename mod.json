@@ -1,0 +1,187 @@
+{
+  "geode": "4.10.0",
+  "gd": {
+    "win": "2.2074",
+    "android": "2.2074"
+  },
+  "id": "lntb.xfc",
+  "name": "XFC",
+  "version": "v2.2.9",
+  "developer": "LNTB017",
+  "description": "X Frame Counter 2.2.9 - trajectory-based click-window counter for .gdr macros (GD 2.2074). 7 colour tiers, frame counter, ms per click, animated blue/black panel, xdBot macro folder support.",
+  "tags": [
+    "utility"
+  ],
+  "dependencies": [
+    {
+      "id": "zilko.xdbot",
+      "version": ">=v2.4.0",
+      "importance": "suggested"
+    }
+  ],
+  "resources": {
+    "sprites": [
+      "resources/*.png"
+    ],
+    "fonts": {
+      "xfc-font": {
+        "path": "resources/Inter-Bold.otf",
+        "size": 36,
+        "outline": 2,
+        "charset": "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz .,:;!?/|()[]<>+-_=*%~#&"
+      }
+    }
+  },
+  "settings": {
+    "show-hud": {
+      "type": "bool",
+      "default": true,
+      "name": "Show HUD"
+    },
+    "show-tiers": {
+      "type": "bool",
+      "default": true,
+      "name": "Show tier list (7 colours)"
+    },
+    "show-ms": {
+      "type": "bool",
+      "default": true,
+      "name": "Show click window in ms"
+    },
+    "show-rings": {
+      "type": "bool",
+      "default": true,
+      "name": "Circle around every click",
+      "description": "Coloured circle + frame window above the player on each click"
+    },
+    "ring-label": {
+      "type": "bool",
+      "default": true,
+      "name": "Frame label above circle"
+    },
+    "ring-scale": {
+      "type": "float",
+      "default": 1.0,
+      "min": 0.4,
+      "max": 2.5,
+      "control": {
+        "slider": true
+      },
+      "name": "Circle size"
+    },
+    "ring-time": {
+      "type": "float",
+      "default": 1.5,
+      "min": 0.0,
+      "max": 8.0,
+      "name": "Circle lifetime (s)",
+      "description": "0 = keep until the attempt resets"
+    },
+    "link-xdbot": {
+      "type": "bool",
+      "default": true,
+      "name": "Link with xdBot (sync)",
+      "description": "Follow xdBot playback by frame: load the same macro in XFC and xdBot"
+    },
+    "show-x-button": {
+      "type": "bool",
+      "default": true,
+      "name": "X button in-level"
+    },
+    "horizon": {
+      "type": "int",
+      "default": 90,
+      "min": 30,
+      "max": 240,
+      "name": "Survive-check length (frames)"
+    },
+    "hud-corner": {
+      "type": "string",
+      "default": "Top Right",
+      "one-of": [
+        "Top Right",
+        "Top Left",
+        "Bottom Right",
+        "Bottom Left"
+      ],
+      "name": "HUD corner"
+    },
+    "hud-scale": {
+      "type": "float",
+      "default": 1.0,
+      "min": 0.5,
+      "max": 2.0,
+      "control": {
+        "slider": true
+      },
+      "name": "HUD scale"
+    },
+    "max-shift": {
+      "type": "int",
+      "default": 30,
+      "min": 5,
+      "max": 30,
+      "name": "Max window searched (frames)"
+    },
+    "tier-0": {
+      "type": "rgb",
+      "default": "#FF2D3C",
+      "name": "Tier 1 (0.001-1 f)"
+    },
+    "tier-1": {
+      "type": "rgb",
+      "default": "#FF8C1E",
+      "name": "Tier 2 (2 f)"
+    },
+    "tier-2": {
+      "type": "rgb",
+      "default": "#FFE128",
+      "name": "Tier 3 (3 f)"
+    },
+    "tier-3": {
+      "type": "rgb",
+      "default": "#50E65A",
+      "name": "Tier 4 (4-5 f)"
+    },
+    "tier-4": {
+      "type": "rgb",
+      "default": "#28DCFF",
+      "name": "Tier 5 (6-8 f)"
+    },
+    "tier-5": {
+      "type": "rgb",
+      "default": "#3282FF",
+      "name": "Tier 6 (9-15 f)"
+    },
+    "tier-6": {
+      "type": "rgb",
+      "default": "#AA5AFF",
+      "name": "Tier 7 (16-30 f)"
+    },
+    "tps-enabled": {
+      "type": "bool",
+      "default": false,
+      "name": "Custom TPS (physics)",
+      "description": "Changes physics steps per second. Macros need 240."
+    },
+    "tps": {
+      "type": "int",
+      "default": 240,
+      "min": 30,
+      "max": 4800,
+      "name": "TPS"
+    },
+    "fps-enabled": {
+      "type": "bool",
+      "default": false,
+      "name": "Custom FPS"
+    },
+    "fps": {
+      "type": "int",
+      "default": 60,
+      "min": 15,
+      "max": 1000,
+      "name": "FPS"
+    }
+  }
+}
