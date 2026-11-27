@@ -41,4 +41,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: XFC-${{ matrix.config.name }}
-          path: ${{ steps.build.outputs.build-output }} 
+          path: ${{ steps.build.outputs.build-output }}
