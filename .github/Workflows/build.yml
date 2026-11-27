@@ -42,3 +42,20 @@ jobs:
         with:
           name: XFC-${{ matrix.config.name }}
           path: ${{ steps.build.outputs.build-output }}
+
+  package:
+    name: Package
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - name: Combine
+        id: combine
+        uses: geode-sdk/build-geode-mod/combine@main
+        with:
+          zstd: false   # چون mod.json روی geode 4.10.0 هست و zstd از 5.9.0 به بعد ساپورت میشه
+
+      - name: Upload combined
+        uses: actions/upload-artifact@v4
+        with:
+          name: XFC-Combined
+          path: ${{ steps.combine.outputs.build-output }}
