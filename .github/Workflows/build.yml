@@ -1,4 +1,3 @@
-# XFC: Windows + Android (64 & 32 bit), GD 2.2074 / Geode 4.10.0
 name: Build XFC 2.2.9
 
 on:
@@ -37,26 +36,9 @@ jobs:
           bindings: geode-sdk/bindings
           bindings-ref: c949aeae063175eca528b33cf8f5b573935b0079
           target: ${{ matrix.config.target }}
-          combine: true
 
-      # per-platform file, so a failed platform never blocks the others
       - name: Upload ${{ matrix.config.name }}
         uses: actions/upload-artifact@v4
         with:
           name: XFC-${{ matrix.config.name }}
-          path: ${{ steps.build.outputs.build-output }}
-
-  package:
-    name: Package (one .geode for all platforms)
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: Combine
-        id: combine
-        uses: geode-sdk/build-geode-mod/combine@main
-
-      - name: Upload combined
-        uses: actions/upload-artifact@v4
-        with:
-          name: XFC-All-Platforms
-          path: ${{ steps.combine.outputs.build-output }}
+          path: ${{ steps.build.outputs.build-output }} 
