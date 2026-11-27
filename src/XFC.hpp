@@ -15,7 +15,7 @@ inline constexpr ccColor3B kAccent{0, 170, 255};
 inline constexpr ccColor3B kAccent2{60, 230, 255};
 inline constexpr ccColor3B kPanelBg{5, 9, 20};
 
-inline const char* font() { return "xfc-font.fnt"_spr; }
+inline const char* font() { return "bigFont.fnt"; }   // built-in GD font: always present, works on Android
 ccColor3B tierColor(int tier);
 
 class Hud : public CCNode {

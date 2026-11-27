@@ -34,15 +34,16 @@ protected:
     // ---------------------------------------------------------------- widgets
     CCLabelBMFont* label(const std::string& t, float scale, ccColor3B c, CCPoint pos, CCNode* parent, CCPoint anchor = {0.f, 0.5f}) {
         auto l = CCLabelBMFont::create(t.c_str(), font()); l->setScale(scale); l->setColor(c); l->setPosition(pos); l->setAnchorPoint(anchor);
+        if (anchor.x == 0.f) l->limitLabelWidth(std::max(30.f, W - pos.x - 16.f), scale, 0.12f);
         parent->addChild(l); return l;
     }
     CCNode* box(float w, float h, ccColor3B c, int op) {
         auto n = CCScale9Sprite::create("square02_001.png"); n->setContentSize({w, h}); n->setColor(c); n->setOpacity(op); return n;
     }
     CCMenuItemSpriteExtra* button(const std::string& t, ccColor3B col, CCPoint pos, float w, SEL_MenuHandler cb, CCNode* menu, int tag = 0) {
-        auto bg = box(w, 24, {10, 22, 44}, 240);
+        auto bg = box(w, 26, {20, 44, 88}, 250);
         auto line = CCLayerColor::create({col.r, col.g, col.b, 255}, w - 10, 2); line->setPosition(5, 2); bg->addChild(line);
-        auto txt = CCLabelBMFont::create(t.c_str(), font()); txt->setScale(0.42f); txt->setColor(col); txt->setPosition({w / 2, 13}); bg->addChild(txt);
+        auto txt = CCLabelBMFont::create(t.c_str(), font()); txt->setScale(0.42f); txt->limitLabelWidth(w - 8.f, 0.42f, 0.12f); txt->setColor(col); txt->setPosition({w / 2, 14}); bg->addChild(txt);
         auto b = CCMenuItemSpriteExtra::create(bg, nullptr, this, cb); b->setPosition(pos); b->setTag(tag); menu->addChild(b);
         b->setScale(0.7f); b->runAction(CCEaseBackOut::create(CCScaleTo::create(0.25f, 1.f)));
         return b;
@@ -101,12 +102,12 @@ protected:
         auto icon = CCSprite::create("xfc-icon.png"_spr); icon->setScale(0.42f); icon->setPosition({RAIL / 2 + 6, sz.height - 40}); m_mainLayer->addChild(icon, 3);
         icon->setScale(0.f); icon->runAction(CCEaseElasticOut::create(CCScaleTo::create(0.7f, 0.42f), 0.6f));
         label("XFC", 0.62f, kAccent2, {RAIL / 2 + 6, sz.height - 72}, m_mainLayer, {0.5f, 0.5f});
-        label("v2.2.9", 0.28f, {110, 150, 200}, {RAIL / 2 + 6, sz.height - 86}, m_mainLayer, {0.5f, 0.5f});
+        label("v2.3.0", 0.28f, {110, 150, 200}, {RAIL / 2 + 6, sz.height - 86}, m_mainLayer, {0.5f, 0.5f});
 
         const char* names[NTABS] = {"MACROS", "ANALYSIS", "VISUALS", "COLORS", "SPEED", "XDBOT", "SETTINGS"};
         auto tm = CCMenu::create(); tm->setPosition(0, 0); m_mainLayer->addChild(tm, 3);
         for (int i = 0; i < NTABS; i++) {
-            m_tabLbl[i] = CCLabelBMFont::create(names[i], font()); m_tabLbl[i]->setScale(0.42f);
+            m_tabLbl[i] = CCLabelBMFont::create(names[i], font()); m_tabLbl[i]->setScale(0.42f); m_tabLbl[i]->limitLabelWidth(RAIL - 20.f, 0.42f, 0.15f);
             auto wrap = CCNode::create(); wrap->setContentSize({RAIL - 16, 24}); m_tabLbl[i]->setPosition({(RAIL - 16) / 2, 12}); wrap->addChild(m_tabLbl[i]);
             m_tabBtn[i] = CCMenuItemSpriteExtra::create(wrap, this, menu_selector(XFCPanel::onTab));
             m_tabBtn[i]->setTag(i); m_tabBtn[i]->setPosition({RAIL / 2 + 6, sz.height - 118 - i * 27.f}); tm->addChild(m_tabBtn[i]);

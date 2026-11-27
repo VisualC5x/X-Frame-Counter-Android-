@@ -44,16 +44,18 @@ void Hud::relayout() {
 
     // fixed-width column: names at x = -70, counts at x = 0 (right aligned) -> digits can never push anything around
     float y = 0;
-    m_frame->setPosition(0, y); y -= 17;
-    m_info->setPosition(0, y);  y -= 14;
+    bool isLeft = !right;
+    m_frame->setAnchorPoint({isLeft ? 0.f : 1.f, 1.f}); m_info->setAnchorPoint({isLeft ? 0.f : 1.f, 1.f});
+    m_frame->setPosition(isLeft ? -70.f : 0.f, y); y -= 17;
+    m_info->setPosition(isLeft ? -70.f : 0.f, y);  y -= 14;
     for (int i = 0; i < 7; i++) {
         m_rows[i]->setVisible(tiers); m_nums[i]->setVisible(tiers);
         m_rows[i]->setColor(tierColor(i)); m_nums[i]->setColor(tierColor(i));
         m_rows[i]->setPosition(-70, y); m_nums[i]->setPosition(0, y); y -= 11;
     }
     float h = -y;
-    float x = right ? win.width - 8 : 8 + 70 * sc;
-    float py = top ? win.height - 6 : 6 + h * sc;
+    float x = right ? win.width - 14 : 14 + 70 * sc;
+    float py = top ? win.height - 10 : 10 + h * sc;
     m_box->setScale(sc);
     this->setPosition(x, py);
 }
