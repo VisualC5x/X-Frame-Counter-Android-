@@ -1,5 +1,13 @@
 # Changelog
 
+## <c-00aaff>v2.3.0</c> (Android + Windows)
+
+- <cg>FIX</c> All text / buttons were invisible: the generated font was empty. Now uses the game's own font
+- <cg>NEW</c> Round XFC button, exactly the size of the other buttons, in the main menu and in the pause menu
+- <cg>NEW</c> HUD (frames + 7 tiers) is top-left of the play screen by default
+- <cg>NEW</c> Android 64/32 build
+- <cg>FIX</c> Labels and buttons always fit their box
+
 ## <c-00aaff>v2.2.9</c>
 
 - <cg>NEW</c> Coloured circle around every click with its frame window (down to <cy>0.001</c> f)

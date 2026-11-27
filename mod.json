@@ -6,9 +6,9 @@
   },
   "id": "lntb.xfc",
   "name": "XFC",
-  "version": "v2.2.9",
+  "version": "v2.3.0",
   "developer": "LNTB017",
-  "description": "X Frame Counter 2.2.9 - trajectory-based click-window counter for .gdr macros (GD 2.2074). 7 colour tiers, frame counter, ms per click, animated blue/black panel, xdBot macro folder support.",
+  "description": "X Frame Counter 2.3.0 - trajectory-based click-window counter for .gdr macros (GD 2.2074). 7 colour tiers, frame counter, ms per click, animated blue/black panel, xdBot macro folder support.",
   "tags": [
     "utility"
   ],
@@ -22,15 +22,7 @@
   "resources": {
     "sprites": [
       "resources/*.png"
-    ],
-    "fonts": {
-      "xfc-font": {
-        "path": "resources/Inter-Bold.otf",
-        "size": 36,
-        "outline": 2,
-        "charset": "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz .,:;!?/|()[]<>+-_=*%~#&"
-      }
-    }
+    ]
   },
   "settings": {
     "show-hud": {
@@ -85,7 +77,7 @@
     },
     "show-x-button": {
       "type": "bool",
-      "default": true,
+      "default": false,
       "name": "X button in-level"
     },
     "horizon": {
@@ -97,7 +89,7 @@
     },
     "hud-corner": {
       "type": "string",
-      "default": "Top Right",
+      "default": "Top Left",
       "one-of": [
         "Top Right",
         "Top Left",
