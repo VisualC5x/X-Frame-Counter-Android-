@@ -1,39 +1,37 @@
-# <c-00aaff>XFC</c> — <c-46ebff>X Frame Counter</c>  <cj>2.2.9</c>
+# <cj>X FRAME COUNTER</c>
+<cy>by LNTB017</c>  -  <cg>v2.7.0</c>
 
-<c-9fc4ff>Exact click-window counter for</c> <cy>.gdr</c> <c-9fc4ff>macros on</c> <cg>GD 2.2074</c><c-9fc4ff>.</c>
+<cb>The exact click window of every click in a .gdr macro.</c>
+GD 2.2074  -  240 TPS  -  Windows
 
 ---
 
-## <c-46ebff>What it does</c>
+## <co>What it does</c>
+Every click is re-played <cj>earlier</c> and <cj>later</c>, frame by frame, until the attempt dies.
+What is left is the <cg>real window in frames</c>, drawn as a <cr>s</c><co>o</c><cy>l</c><cg>i</c><cj>d</c> hollow ring right on the click:
 
-<cr>●</c> **0.001 – 1 f**  <c-9fc4ff>sub-frame window (3 decimals)</c>
-<co>●</c> **2 f**
-<cy>●</c> **3 f**
-<cg>●</c> **4 – 5 f**
-<ca>●</c> **6 – 8 f**
-<cb>●</c> **9 – 15 f**
-<cp>●</c> **16 – 30 f**
+- <cg>5f (-2/+2)</c>  = 5 frames wide, 2 early, 2 late, plus the click itself
+- <cy>*</c>  = limited by a neighbouring input (spam), not by a hazard
+- <cr>X</c>  = the click dies even on its own frame
+- <cr>~</c>  = the verification pass disagreed, treat with care
 
-Every click gets a <c-46ebff>coloured circle</c> with its frame window above it, the HUD counts clicks per tier, and the exact window is shown in <cy>frames</c> and <cy>ms</c>.
+## <co>How to use</c>
+1. Pick your macro in the mod settings
+2. Open its level and pause
+3. Press the round <cj>XFC</c> button
+4. Press <cg>ANALYZE</c>, when it ends the macro replays and every click gets its ring
 
-## <c-46ebff>Features</c>
+## <co>Colour tiers</c>
+<cr>1f</c>   <co>2f</c>   <cy>3f</c>   <cg>4-5f</c>   <cj>6-8f</c>   <cb>9-15f</c>   <cp>16f+</c>
 
-- <cg>Trajectory analysis</c>: each click is re-simulated earlier / later from checkpoints until it hits a hazard
-- <cg>Spam aware</c>: clicks are limited by their neighbours, not just hazards
-- <cg>All gamemodes + dual</c>: the real game physics are used
-- <cg>Frame counter</c> top-right, HUD corner and scale are yours to choose
-- <cg>xdBot link</c>: shared macro folder + frame sync, one tap "Send to xdBot"
-- <cg>TPS / FPS</c> controls in the menu
-- <cg>Sub-frame</c> windows down to 0.001 f (high-TPS bisection)
-- <cg>All xdBot macros</c> listed: tap ANALYZE or PLAY on any of them
-- <cg>.gdr only</c>: upload or pick from the xdBot macro folder
-- <cg>QOL-style menu</c>: tap the round <c-00aaff>X</c> in-level, change everything live
+## <co>Why it is exact</c>
+- <cj>Press and release move together</c>, the hold length never changes
+- <cj>Deep survive-check</c>: a moved click must survive until several later clicks are behind it
+- <cj>Every window is verified</c> a second time
+- <cj>Drift detector</c>: warns if the game does not restore a snapshot exactly
 
-## <c-46ebff>How to use</c>
+## <co>Settings</c>
+Rings, labels, ms and the HUD can each be switched off. Ring size and lifetime, search distance and survive-check length are adjustable.
 
-1. Tap the <c-00aaff>X</c> button (in a level) or the XFC icon (main menu)
-2. <cy>MACROS</c> → upload / load a .gdr
-3. Enter the macro's level → <cy>ANALYZE</c> → <cy>PLAY</c>
-4. Using xdBot? <cy>XDBOT</c> tab → send the macro and let xdBot play it
-
-<c-9fc4ff>Macros must be 240 fps and match the level.</c>
+---
+<cy>Needs a 240 fps macro recorded for the level you are playing.</c>

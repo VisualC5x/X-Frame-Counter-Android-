@@ -1,0 +1,16 @@
+X FRAME COUNTER by LNTB017 - tier sounds
+
+Each click window tier plays its own sound (tier-1 = hardest ... tier-7 = widest):
+
+tier-1.wav  RED     0.001 - 1 f   high bright bell + sparkle  (hardest, most special)
+tier-2.wav  ORANGE  2 f           bell
+tier-3.wav  YELLOW  3 f           chime
+tier-4.wav  GREEN   4 - 5 f       marimba
+tier-5.wav  CYAN    6 - 8 f       pluck
+tier-6.wav  BLUE    9 - 15 f      soft pop
+tier-7.wav  PURPLE  16 - 30 f     low tick (quietest, widest)
+
+They are already inside XFC-source.zip (resources/). To use your own sounds:
+put files named tier-1 ... tier-7 (.ogg / .mp3 / .wav) in
+  Geometry Dash/geode/config/lntb017.xfc/sounds/
+Your file wins over the built-in one. Restart the game after changing them.
