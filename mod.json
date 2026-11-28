@@ -7,8 +7,8 @@
   },
   "id": "lntb017.xfc",
   "name": "X FRAME COUNTER",
-  "version": "v2.9.4",
-  "developer": "LNTB017",
+  "version": "v2.9.6",
+  "developers": ["LNTB017"],
   "description": "Exact click windows (in frames) for .gdr macros: counter rows 0-1 ... 15-20, coloured circles on every click, sounds, auto-open level.",
   "tags": [
     "utility"

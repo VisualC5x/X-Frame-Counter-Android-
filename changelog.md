@@ -1,9 +1,22 @@
 # Changelog
 
+## v2.9.6
+<cy>PLAY works on its own</c>
+- PLAY starts the macro right away, it no longer waits for (or depends on) the analysis
+
+## v2.9.5
+<cy>Menu fixed + macro search</c>
+- Menu pages and the macro list are always visible now (own scrolling: drag, or the two arrows next to the close button)
+- <cy>Search bar</c> in Macros: type part of a name and the list filters
+- ON / OFF written on every switch, tab pictures, new XFC circle icon
+- Macros found in the xdBot folder automatically; the last macro is remembered; ANALYZE / PLAY load one by themselves
+- Analysis: the game's own updates are muted while XFC re-simulates, clean restart + automatic retry, clearer error text
+- Developer name set as <cy>LNTB017</c>
+
 ## v2.9.4
 <cy>Phone-friendly package</c>
 - One combined .geode for <cy>Windows + Android 32/64 + iOS</c>
-- Source zip has no .git folder; visible `github/build.yml` copy of the workflow for phone uploads
+- Source zip has no .git folder; `github/build.yml` is a visible copy of the workflow
 
 ## v2.9.3
 <cy>Mobile (Android + iOS)</cy>

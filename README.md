@@ -1,4 +1,4 @@
-#  X FRAME COUNTER `v2.9.4`
+#  X FRAME COUNTER `v2.9.6`
 **by LNTB017** · Geode mod · GD 2.2074 · 240 TPS · Windows + Android + iOS
 
 > 🟥 1f · 🟧 2f · 🟨 3f · 🟩 4-5f · 🟦 6-8f · 🔵 9-15f · 🟣 16f+
