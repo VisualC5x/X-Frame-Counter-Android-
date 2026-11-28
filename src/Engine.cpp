@@ -60,8 +60,9 @@ bool State::levelMatches(std::string& why) {
 }
 
 void State::analyzeAndPlay() {
-    if (!windows.empty()) { startPlayback(); return; }
-    playAfter = true; startAnalysis();
+    // PLAY never waits for the analysis: the macro is played right away (click windows show only if it was analysed before)
+    if (!ensureMacro()) return;
+    startPlayback();
 }
 
 bool State::enterLevel(int action) {
@@ -94,12 +95,18 @@ std::filesystem::path State::xfcDir() {
 bool State::xdbotLoaded() const { return Loader::get()->getLoadedMod("zilko.xdbot") != nullptr; }
 
 std::filesystem::path State::xdbotFolder() {
-    auto xd = Loader::get()->getLoadedMod("zilko.xdbot");
-    if (!xd) return {};
-    auto p = xd->getSettingValue<std::filesystem::path>("macros_folder");   // xdBot's own "Macro Save Location"
-    if (p.empty()) p = xd->getSaveDir() / "macros";
-    std::error_code ec; std::filesystem::create_directories(p, ec);
-    return p;
+    std::error_code ec;
+    if (auto xd = Loader::get()->getLoadedMod("zilko.xdbot")) {
+        std::filesystem::path p;
+        if (xd->hasSetting("macros_folder")) p = xd->getSettingValue<std::filesystem::path>("macros_folder");   // xdBot's own "Macro Save Location"
+        if (p.empty()) p = xd->getSaveDir() / "macros";
+        std::filesystem::create_directories(p, ec);
+        return p;
+    }
+    // xdBot not loaded (or not installed): its default macro folder sits next to XFC's own save folder
+    auto guess = Mod::get()->getSaveDir().parent_path() / "zilko.xdbot" / "macros";
+    if (std::filesystem::is_directory(guess, ec)) return guess;
+    return {};
 }
 
 bool State::sendToXdbot() {
@@ -117,12 +124,36 @@ std::vector<std::filesystem::path> State::findMacros() {
     auto xf = xdbotFolder(); if (!xf.empty()) dirs.push_back(xf);
     for (auto& d : dirs) {
         std::error_code ec;
-        for (auto& e : std::filesystem::directory_iterator(d, ec))
-            if (e.is_regular_file() && e.path().extension() == ".gdr") out.push_back(e.path());   // .gdr only
+        // two levels deep: some xdBot setups keep macros in sub-folders
+        for (auto it = std::filesystem::recursive_directory_iterator(d, std::filesystem::directory_options::skip_permission_denied, ec);
+             !ec && it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
+            std::error_code e2;
+            if (it->is_directory(e2) && it.depth() >= 1) { it.disable_recursion_pending(); continue; }   // never deeper than one sub-folder
+            if (e2 || !it->is_regular_file(e2) || e2 || !endsWithGdr(it->path().string())) continue;      // .gdr only (any letter case)
+            out.push_back(it->path());
+        }
     }
-    std::sort(out.begin(), out.end());
+    std::sort(out.begin(), out.end(), [](auto& a, auto& b) {
+        auto x = a.filename().string(), y = b.filename().string();
+        for (auto& c : x) c = (char)std::tolower((unsigned char)c);
+        for (auto& c : y) c = (char)std::tolower((unsigned char)c);
+        return x < y;
+    });
     out.erase(std::unique(out.begin(), out.end(), [](auto& a, auto& b) { return a.filename() == b.filename(); }), out.end());
     return out;
+}
+
+std::string State::lastMacro() const { return Mod::get()->getSavedValue<std::string>("last-macro", ""); }
+
+// Makes sure a macro is loaded: keeps the current one, else the remembered one, else the first one found.
+bool State::ensureMacro() {
+    if (macro.ok()) return true;
+    std::error_code ec;
+    auto last = lastMacro();
+    if (!last.empty() && std::filesystem::exists(last, ec) && loadMacro(last)) return true;
+    for (auto& f : findMacros()) if (loadMacro(f)) return true;
+    status = "No .gdr macro found - press UPLOAD, or put the file in the xdBot macros folder";
+    return false;
 }
 
 void State::clearResults() { windows.clear(); clickInput.clear(); summary = {}; phase = Phase::Idle; progress = 0; }
@@ -138,6 +169,7 @@ bool State::loadMacro(const std::filesystem::path& p) {
     macro = std::move(m);
     macroPath = p.string();
     macroName = p.filename().string();
+    Mod::get()->setSavedValue<std::string>("last-macro", macroPath);
 
     // No made-up windows: click windows come only from the real physics analysis (or its cache).
     windows.clear(); clickInput.clear(); summary = {}; phase = Phase::Idle; progress = 0;
@@ -188,7 +220,7 @@ static void restartLevel(PlayLayer* pl) {
 }
 
 void State::startPlayback() {
-    if (!macro.ok() || macro.inputs.empty()) { status = "Load a .gdr macro first"; return; }
+    if (!ensureMacro()) return;
     auto pl = PlayLayer::get();
     if (!pl) { enterLevel(2); return; }
     { std::string why; if (!levelMatches(why)) { status = why; return; } }
@@ -230,8 +262,11 @@ void State::announce(size_t ordinal) {
 class $modify(XFCBase, GJBaseGameLayer) {
     // TPS control - same technique as xdBot's TPS bypass (hooks update + getModifiedDelta)
     void update(float dt) {
-        double tps = activeTps();
         auto& s = State::get();
+        // while the analyser drives the level, ONLY its own steps may advance the physics (otherwise the game's real-time
+        // loop would run extra steps in between and the frame numbers / checkpoints would not match the macro)
+        if (s.simulating && !s.stepping) { auto pl = PlayLayer::get(); if (pl && this == (GJBaseGameLayer*)pl) return; }
+        double tps = activeTps();
         if (tps == 240.0 || !PlayLayer::get() || s.simulating) return GJBaseGameLayer::update(dt);
         float newDt = (float)(1.0 / tps);
         float realDt = dt + m_fields->leftOver;
@@ -349,6 +384,8 @@ class $modify(XFCPlay, PlayLayer) {
         if (s.simDied) return;
         s.simDied = true;
         s.simDeathFrac = 0; s.simGap = 0;
+        s.simHazard = hazard ? (int)hazard->m_objectID : -1;
+        if (p) { s.simDieX = p->getPositionX(); s.simDieY = p->getPositionY(); }
         // distance still left / overshoot: depth inside the hazard vs. distance travelled per physics step
         if (p && hazard) {
             auto a = p->GameObject::getObjectRect(), b = hazard->getObjectRect();
@@ -376,8 +413,11 @@ struct GDBackend : Backend {
     double frac[2] = {0, 0}, gap[2] = {0, 0};
     GDBackend(State& st, PlayLayer* p, int ms, int hz) : s(st), pl(p), maxShift(ms), horizon(hz) {}
 
+    struct StepScope { State& st; StepScope(State& x) : st(x) { st.stepping = true; } ~StepScope() { st.stepping = false; } };
+
     bool stepOne() {
         if (s.simDone) return true;                          // level finished inside the simulation: nothing left to step
+        StepScope scope(s);
         int f0 = currentFrame(pl);
         s.simPrevX = pl->m_player1->getPositionX();
         for (int tries = 0; tries < 400; tries++) {          // the game swallows the first updates after a restart
@@ -450,6 +490,7 @@ struct GDBackend : Backend {
     }
     // ---- sub-frame: same checkpoint, but physics at 240*M TPS so the click can sit at 1/M-frame positions
     bool stepHi(int M) {
+        StepScope scope(s);
         s.simPrevX = pl->m_player1->getPositionX();
         pl->m_extraDelta = 0;
         pl->update((float)(1.0 / (240.0 * M)) + 1e-8f);
@@ -501,6 +542,9 @@ struct GDBackend : Backend {
 struct Driver : CCNode {
     State& s; PlayLayer* pl; std::unique_ptr<GDBackend> be;
     size_t clickIdx = 0; int maxShift; bool recording = true;
+    float settle = 0.f;                       // seconds the level is left alone after a (re)start, so nothing stale can interfere
+    int restarts = 0;                         // automatic restarts after a death in the very first frames
+    int stage = 0;                            // 0 = first pause, 1 = running
 
     static Driver* create(PlayLayer* p) { auto r = new Driver(p); r->autorelease(); return r; }
     ~Driver() override {                      // level closed in the middle of an analysis: never leave the game in "simulating" mode
@@ -518,11 +562,28 @@ struct Driver : CCNode {
         s.clickInput.clear(); s.windows.clear(); s.summary = {};
         for (size_t i = 0; i < s.macro.inputs.size(); i++) if (s.macro.inputs[i].down) s.clickInput.push_back(i);
         s.run = s.macro.inputs; s.next = 0;
-        s.simulating = true; s.simDied = false; s.simDone = false;
+        s.simulating = true; s.simDied = false; s.simDone = false; s.simHazard = -1;
+        // 1) mute the real game, 2) let any pending respawn / resume of the live run fire and die out, 3) restart cleanly
         restartLevel(pl);
-        s.phase = Phase::Recording; s.status = "Phase 1/2: recording checkpoints...";
+        settle = 1.2f; restarts = 0; stage = 0;
+        s.phase = Phase::Recording; s.status = "Preparing the level...";
         if (s.hud) s.hud->setStatus("XFC: " + s.status, {140, 220, 255});
         this->schedule(schedule_selector(Driver::tick), 0.f);
+    }
+
+    void cleanRestart(float wait) {
+        restartLevel(pl);
+        s.simDied = false; s.simDone = false; s.simDeathFrac = 0; s.simGap = 0; s.simHazard = -1;
+        s.next = 0; s.run = s.macro.inputs;
+        for (auto& c : be->ckpts) c.obj->release();
+        be->ckpts.clear();
+        settle = wait;
+    }
+
+    std::string deathText(int f) const {
+        std::string where = fmt::format("frame {} (object {}, x {:.0f} y {:.0f})", f, s.simHazard, s.simDieX, s.simDieY);
+        if (f <= 3) return "The level would not start cleanly (" + where + ") - close the level, open it again and press the button once more";
+        return "The macro dies at " + where + " in XFC's re-simulation - wrong level / different game version / macro not recorded at 240 TPS";
     }
 
     void finish(Phase p, const std::string& msg) {
@@ -540,7 +601,13 @@ struct Driver : CCNode {
         else if (p != Phase::Done) s.playAfter = false;
     }
 
-    void tick(float) {
+    void tick(float dt) {
+        if (settle > 0.f) {                                        // waiting: nothing is stepped, the level just sits at its start
+            settle -= dt;
+            if (settle > 0.f) return;
+            if (stage == 0) { stage = 1; cleanRestart(0.25f); return; }   // after the first pause: one clean restart + a short quiet moment
+            s.status = "Phase 1/2: recording checkpoints...";
+        }
         if (s.hud && (++tickCount % 6) == 0)
             s.hud->setStatus(fmt::format("XFC analysing {:.0f}%  -  {}", s.progress * 100.f, recording ? "recording" : "measuring clicks"), {140, 220, 255});
         auto t0 = std::chrono::steady_clock::now();
@@ -551,7 +618,8 @@ struct Driver : CCNode {
                     auto c = pl->createCheckpoint(); c->retain(); be->ckpts.push_back({f, c});
                 }
                 if (!be->stepOne()) return finish(Phase::Failed, "Step desync - physics must run at 240 TPS; retry");
-                if (s.simDied) return finish(Phase::Failed, "The macro dies at frame " + std::to_string(f) + " in XFC's re-simulation - wrong level / different game version / macro not recorded at 240 TPS");
+                if (s.simDied && f <= 3 && restarts < 5) { restarts++; cleanRestart(0.3f); return; }   // died while the level was still starting: try again
+                if (s.simDied) return finish(Phase::Failed, deathText(f));
                 s.progress = 0.5f * f / std::max<int>(1, s.macro.inputs.back().frame);
                 if (s.simDone || f >= (int)s.macro.inputs.back().frame) { recording = false; s.simDone = false; s.status = "Phase 2/2: measuring click windows..."; break; }
             } else {
@@ -567,11 +635,7 @@ struct Driver : CCNode {
 } // namespace
 
 void State::startAnalysis() {
-    if (!macro.ok() || macro.inputs.empty()) {
-        status = "Load a .gdr macro first (inputs empty)";
-        log::warn("XFC analyze rejected: no macro");
-        return;
-    }
+    if (!ensureMacro()) { log::warn("XFC analyze rejected: no macro"); return; }
     auto pl = PlayLayer::get();
     if (!pl) {
         if (!enterLevel(1)) playAfter = false;

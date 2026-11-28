@@ -1,14 +1,17 @@
-// XFC menu - modern dark UI: left sidebar with tabs, scrolling content with rounded rows, live settings.
-// Every page scrolls inside a clipped area, so nothing can ever stick out of the panel or hide behind something else.
+// XFC menu - dark "mod" UI: left sidebar with icons, rounded rows, live settings, macro search.
+// Pages scroll WITHOUT any GL clipping (rows outside the window are simply hidden), so the content shows on every device
+// and in every scene (main menu and in-level pause menu) and nothing can stick out of the panel.
 #include <algorithm>
 #include <array>
 #include <cctype>
 #include <cmath>
+#include <functional>
 #include <iterator>
 #include <map>
 #include <vector>
 #include "XFC.hpp"
 #include <Geode/ui/GeodeUI.hpp>
+#include <Geode/ui/TextInput.hpp>
 
 namespace xfc {
 
@@ -16,9 +19,9 @@ class XFCPanel;
 static XFCPanel* s_openPanel = nullptr;
 
 namespace xui {
-inline constexpr ccColor3B kBg{22, 20, 44}, kBorder{78, 70, 148}, kSide{31, 29, 60}, kRow{41, 39, 78}, kRowHi{62, 57, 118},
-    kBtn{52, 49, 98}, kAcc{128, 108, 255}, kAcc2{176, 160, 255}, kText{238, 238, 252}, kDim{152, 150, 192},
-    kGood{100, 238, 150}, kWarn{255, 210, 100}, kBad{255, 105, 115}, kOff{66, 63, 108};
+inline constexpr ccColor3B kBg{17, 16, 36}, kBorder{92, 80, 178}, kSide{25, 24, 52}, kRow{36, 34, 70}, kRowHi{66, 60, 124},
+    kBtn{47, 44, 92}, kAcc{128, 108, 255}, kAcc2{176, 160, 255}, kText{240, 240, 255}, kDim{150, 148, 192},
+    kGood{100, 238, 150}, kWarn{255, 210, 100}, kBad{255, 105, 115}, kOff{62, 59, 104}, kCyan{70, 225, 255};
 inline ccColor4F c4(ccColor3B c, float a = 1.f) { return {c.r / 255.f, c.g / 255.f, c.b / 255.f, a}; }
 
 // rounded rectangle, origin bottom-left (pure geometry: no texture, looks the same on every device)
@@ -35,22 +38,54 @@ inline void roundInto(CCDrawNode* d, float w, float h, float r, ccColor3B fill, 
 inline CCDrawNode* rrect(float w, float h, float r, ccColor3B fill, float a = 1.f, ccColor3B border = {0, 0, 0}, float bw = 0.f) {
     auto d = CCDrawNode::create(); roundInto(d, w, h, r, fill, a, border, bw); return d;
 }
+// filled circle / ring outline as a polygon (drawDot is not reliable on every device)
+inline void circleInto(CCDrawNode* d, float cx, float cy, float r, ccColor3B fill, float a = 1.f, float ringW = 0.f) {
+    std::vector<CCPoint> p;
+    for (int i = 0; i < 24; i++) { float t = (float)i * 6.2831853f / 24.f; p.push_back(ccp(cx + r * std::cos(t), cy + r * std::sin(t))); }
+    d->drawPolygon(p.data(), (unsigned)p.size(), c4(fill, ringW > 0.f ? 0.f : a), ringW, c4(fill, ringW > 0.f ? 1.f : 0.f));
+}
+inline std::string lowerStr(std::string s) { for (auto& c : s) c = (char)std::tolower((unsigned char)c); return s; }
 
-// a menu that ignores taps outside of its scroll area (items scrolled out of view can never be pressed by accident)
+// A menu that ignores taps outside of its scroll window and turns a finger drag into scrolling.
+// A tap on a button still presses it; as soon as the finger moves it becomes a scroll and the button is released unpressed.
 class ClipMenu : public CCMenu {
 public:
     CCNode* m_clip = nullptr;
+    std::function<void(float)> m_scroll;
+    CCPoint m_last{0, 0}, m_start{0, 0};
+    bool m_drag = false, m_tracking = false, m_mine = false;
     static ClipMenu* create(CCNode* clip) {
         auto r = new ClipMenu();
         if (r && r->init()) { r->m_clip = clip; r->autorelease(); return r; }
         delete r; return nullptr;
     }
     bool ccTouchBegan(CCTouch* t, CCEvent* e) override {
-        if (m_clip) {
-            auto p = m_clip->convertTouchToNodeSpace(t); auto s = m_clip->getContentSize();
-            if (p.x < 0 || p.y < 0 || p.x > s.width || p.y > s.height) return false;
+        m_mine = false; m_drag = false; m_tracking = false;
+        if (!m_clip || !this->isVisible()) return false;
+        auto p = m_clip->convertTouchToNodeSpace(t); auto s = m_clip->getContentSize();
+        if (p.x < 0 || p.y < 0 || p.x > s.width || p.y > s.height) return false;
+        m_mine = true; m_last = m_start = p;
+        m_tracking = CCMenu::ccTouchBegan(t, e);
+        return true;                                           // we keep the touch even on empty space, so dragging works everywhere
+    }
+    void ccTouchMoved(CCTouch* t, CCEvent* e) override {
+        if (!m_mine) return;
+        auto p = m_clip->convertTouchToNodeSpace(t);
+        if (!m_drag && std::abs(p.y - m_start.y) + std::abs(p.x - m_start.x) > 9.f) {
+            m_drag = true;
+            if (m_tracking) { CCMenu::ccTouchCancelled(t, e); m_tracking = false; }
         }
-        return CCMenu::ccTouchBegan(t, e);
+        if (m_drag) { if (m_scroll) m_scroll(p.y - m_last.y); }
+        else if (m_tracking) CCMenu::ccTouchMoved(t, e);
+        m_last = p;
+    }
+    void ccTouchEnded(CCTouch* t, CCEvent* e) override {
+        if (m_tracking) CCMenu::ccTouchEnded(t, e);
+        m_tracking = false; m_drag = false; m_mine = false;
+    }
+    void ccTouchCancelled(CCTouch* t, CCEvent* e) override {
+        if (m_tracking) CCMenu::ccTouchCancelled(t, e);
+        m_tracking = false; m_drag = false; m_mine = false;
     }
 };
 }
@@ -84,9 +119,14 @@ protected:
     static constexpr float CX = SW + 18, FOOT = 30;                    // content area: x from CX, y from FOOT
     static constexpr float CW = W - CX - 12, CH = H - 48 - FOOT;
     static constexpr int NTABS = 7;
+    static constexpr float kEdge = 6.f;                                // a row may overhang the window by this much and still be shown
 
-    struct Page { ScrollLayer* sc = nullptr; CCNode* body = nullptr; ClipMenu* menu = nullptr; float y = 0, w = 0, viewH = 0; };
+    struct Row { CCNode* node = nullptr; std::vector<CCNode*> items; float top = 0, bottom = 0; };
+    struct Page { CCNode* view = nullptr; CCNode* body = nullptr; ClipMenu* menu = nullptr; std::vector<Row> rows;
+                  float y = 0, w = 0, viewH = 0, scroll = 0, contentH = 0; };
 
+    Page m_pages[NTABS];
+    CCMenu* m_tabMenu = nullptr;
     CCNode* m_tabs[NTABS]{};
     CCNode* m_tabHi[NTABS]{};
     CCLabelBMFont* m_tabLbl[NTABS]{};
@@ -98,6 +138,9 @@ protected:
     std::array<CCDrawNode*, kTierCount> m_sw{};
     CCLabelBMFont* m_summary = nullptr;
     CCLabelBMFont* m_xdInfo = nullptr;
+    CCLabelBMFont* m_count = nullptr;
+    TextInput* m_search = nullptr;
+    std::string m_query;
     std::vector<std::string> m_keys;
     std::map<std::string, CCLabelBMFont*> m_vals;
     std::map<std::string, std::pair<const int*, int>> m_presets;
@@ -119,63 +162,109 @@ protected:
         auto b = CCMenuItemSpriteExtra::create(n, nullptr, this, cb); b->setPosition(at); b->setTag(tag); menu->addChild(b);
         return b;
     }
+    // ON / OFF switch with the state written on it
     CCNode* pill(bool on) {
-        auto n = CCNode::create(); n->setContentSize({40, 20});
-        n->addChild(rrect(40, 20, 10, on ? kAcc : kOff));
-        auto k = CCDrawNode::create(); k->drawDot(ccp(on ? 30.f : 10.f, 10.f), 7.f, c4({255, 255, 255})); n->addChild(k);
+        auto n = CCNode::create(); n->setContentSize({52, 22});
+        n->addChild(rrect(52, 22, 11, on ? kAcc : kOff, 1.f, on ? kAcc2 : kBorder, 1.f));
+        auto k = CCDrawNode::create(); circleInto(k, on ? 41.f : 11.f, 11.f, 8.f, {255, 255, 255}); n->addChild(k);
+        txt(on ? "ON" : "OFF", 0.26f, on ? ccColor3B{255, 255, 255} : kDim, {on ? 18.f : 34.f, 11.5f}, n, {0.5f, 0.5f});
         return n;
     }
+    CCSprite* icon(const std::string& name, float size, CCPoint pos, CCNode* parent, int z = 2) {
+        auto ic = CCSprite::create(name.c_str()); if (!ic) return nullptr;
+        ic->setScale(size / std::max(1.f, std::max(ic->getContentWidth(), ic->getContentHeight())));
+        ic->setPosition(pos); parent->addChild(ic, z); return ic;
+    }
+    // small vector icons for the tabs that have no picture of their own
+    void tabIcon(int i, CCNode* parent, CCPoint c, ccColor3B col) {
+        auto d = CCDrawNode::create(); parent->addChild(d, 2);
+        if (i == 2) { circleInto(d, c.x, c.y, 6.5f, col, 1.f, 1.6f); circleInto(d, c.x, c.y, 2.2f, col); }                     // visuals: eye / ring
+        else if (i == 3) { circleInto(d, c.x - 4.5f, c.y - 2.f, 3.4f, {255, 90, 100}); circleInto(d, c.x + 4.5f, c.y - 2.f, 3.4f, {90, 230, 130});
+                           circleInto(d, c.x, c.y + 4.5f, 3.4f, {90, 160, 255}); }                                                 // colours: three dots
+        else if (i == 4) { CCPoint a[3] = {ccp(c.x - 7, c.y - 5.5f), ccp(c.x - 7, c.y + 5.5f), ccp(c.x, c.y)};
+                           CCPoint b[3] = {ccp(c.x, c.y - 5.5f), ccp(c.x, c.y + 5.5f), ccp(c.x + 7, c.y)};
+                           d->drawPolygon(a, 3, c4(col), 0, c4(col, 0)); d->drawPolygon(b, 3, c4(col), 0, c4(col, 0)); }          // speed: double arrow
+        else if (i == 5) { circleInto(d, c.x - 3.5f, c.y, 5.f, col, 1.f, 1.6f); circleInto(d, c.x + 3.5f, c.y, 5.f, col, 1.f, 1.6f); } // xdBot: linked rings
+    }
 
-    // ---------------------------------------------------------------- pages
-    Page makePage(CCNode* parent, float reserveTop = 0.f) {
-        Page p; p.w = CW; p.viewH = CH - reserveTop;
-        p.sc = ScrollLayer::create({CW, p.viewH}); p.sc->setPosition(CX, FOOT); parent->addChild(p.sc);
-        p.body = CCNode::create(); p.sc->m_contentLayer->addChild(p.body);
-        p.menu = ClipMenu::create(p.sc); p.menu->setPosition(0, 0); p.body->addChild(p.menu, 5);
-        return p;
+    // ---------------------------------------------------------------- pages (own scrolling, no GL clipping)
+    int prio() { return m_tabMenu ? m_tabMenu->getTouchPriority() : -128; }
+    void applyScroll(Page& p) {
+        if (!p.view) return;
+        float maxS = std::max(0.f, p.contentH - p.viewH);
+        p.scroll = std::clamp(p.scroll, 0.f, maxS);
+        p.body->setPositionY(p.viewH + p.scroll);
+        for (auto& r : p.rows) {
+            float top = r.top + p.viewH + p.scroll, bot = r.bottom + p.viewH + p.scroll;
+            bool vis = bot >= -kEdge && top <= p.viewH + kEdge;
+            r.node->setVisible(vis);
+            for (auto it : r.items) it->setVisible(vis);
+        }
     }
-    void endPage(Page& p) {
-        float h = std::max(p.viewH, -p.y + 6.f);
-        p.sc->m_contentLayer->setContentSize({CW, h});
-        p.body->setPosition({0, h});
-        p.sc->moveToTop();
+    void scrollBy(int id, float dy) { auto& p = m_pages[id]; if (p.view) { p.scroll += dy; applyScroll(p); } }
+    void onScrollUp(CCObject*) { scrollBy(m_tab, -kListH * 1.6f); }
+    void onScrollDown(CCObject*) { scrollBy(m_tab, kListH * 1.6f); }
+
+    void makePage(int id, CCNode* parent, float reserveTop = 0.f) {
+        float oldScroll = m_pages[id].scroll;
+        Page& p = m_pages[id]; p = Page(); p.scroll = oldScroll; p.w = CW; p.viewH = CH - reserveTop;
+        p.view = CCNode::create(); p.view->setContentSize({CW, p.viewH}); p.view->setPosition(CX, FOOT); parent->addChild(p.view);
+        p.body = CCNode::create(); p.view->addChild(p.body);
+        p.menu = ClipMenu::create(p.view); p.menu->setPosition(0, 0); p.menu->setTouchPriority(prio());
+        p.menu->m_scroll = [this, id](float dy) { scrollBy(id, dy); };
+        p.body->addChild(p.menu, 5);
     }
+    void endPage(int id) {
+        auto& p = m_pages[id];
+        p.contentH = std::max(p.viewH, -p.y + 4.f);
+        applyScroll(p);
+    }
+    // a row of height h at the current position; returns its index
+    int newRow(Page& p, float h, float gap) {
+        Row r; r.top = p.y; r.bottom = p.y - h;
+        r.node = CCNode::create(); r.node->setPosition({0, r.bottom}); r.node->setContentSize({p.w, h}); p.body->addChild(r.node);
+        p.rows.push_back(r); p.y -= h + gap;
+        return (int)p.rows.size() - 1;
+    }
+    float rowCY(Page& p, int r) { return p.rows[r].bottom + (p.rows[r].top - p.rows[r].bottom) / 2; }   // y inside the page (for menu items)
+    void keep(Page& p, int r, CCNode* item) { p.rows[r].items.push_back(item); }
     void section(Page& p, const std::string& t) {
-        txt(t, 0.32f, kAcc2, {4, p.y - 9}, p.body, {0.f, 0.5f}, p.w - 8);
-        p.y -= 22;
+        int r = newRow(p, 18.f, 4.f);
+        txt(t, 0.32f, kAcc2, {4, 9}, p.rows[r].node, {0.f, 0.5f}, p.w - 8);
     }
     void note(Page& p, const std::string& t, ccColor3B c = kDim) {
-        txt(t, 0.28f, c, {6, p.y - 7}, p.body, {0.f, 0.5f}, p.w - 12);
-        p.y -= 15;
+        int r = newRow(p, 13.f, 2.f);
+        txt(t, 0.28f, c, {6, 6.5f}, p.rows[r].node, {0.f, 0.5f}, p.w - 12);
     }
-    float beginRow(Page& p, const std::string& name, float h = kRowH, ccColor3B nameCol = kText) {
-        float cy = p.y - h / 2;
-        auto bg = rrect(p.w, h, 9, kRow); bg->setPosition({0, p.y - h}); p.body->addChild(bg);
-        if (!name.empty()) txt(name, 0.38f, nameCol, {12, cy}, p.body, {0.f, 0.5f}, p.w - 140.f);
-        p.y -= h + 5;
-        return cy;
+    int beginRow(Page& p, const std::string& name, float h = kRowH, ccColor3B nameCol = kText) {
+        int r = newRow(p, h, 5.f);
+        p.rows[r].node->addChild(rrect(p.w, h, 9, kRow, 1.f, kRowHi, 0.8f));
+        if (!name.empty()) txt(name, 0.38f, nameCol, {12, h / 2}, p.rows[r].node, {0.f, 0.5f}, p.w - 150.f);
+        return r;
     }
     void addToggle(Page& p, const char* key, const char* name) {
-        float cy = beginRow(p, name);
+        int r = beginRow(p, name); float cy = rowCY(p, r);
         auto t = CCMenuItemToggler::create(pill(false), pill(true), this, menu_selector(XFCPanel::onToggle));
-        t->toggle(optB(key)); t->setPosition({p.w - 12 - 20, cy}); t->setTag((int)m_keys.size()); m_keys.push_back(key); p.menu->addChild(t);
+        t->toggle(optB(key)); t->setPosition({p.w - 12 - 26, cy}); t->setTag((int)m_keys.size()); m_keys.push_back(key);
+        p.menu->addChild(t); keep(p, r, t);
     }
     // [-] value [+]: the value label is centred in a fixed slot, so changing digits never moves anything
+    void addStepper(Page& p, const char* key, const char* name, SEL_MenuHandler down, SEL_MenuHandler up) {
+        int r = beginRow(p, name); float cy = rowCY(p, r); int id = (int)m_keys.size(); m_keys.push_back(key);
+        keep(p, r, pillBtn(p.menu, "-", kAcc2, {p.w - 120, cy}, kSq, down, id));
+        keep(p, r, pillBtn(p.menu, "+", kAcc2, {p.w - 24, cy}, kSq, up, id));
+        m_vals[key] = txt("", 0.4f, kText, {p.w - 72, p.rows[r].node->getContentHeight() / 2}, p.rows[r].node, {0.5f, 0.5f}); refreshVal(key);
+    }
     void addStep(Page& p, const char* key, const char* name) {
-        float cy = beginRow(p, name); int id = (int)m_keys.size(); m_keys.push_back(key);
-        pillBtn(p.menu, "-", kAcc2, {p.w - 120, cy}, kSq, menu_selector(XFCPanel::onStepDown), id);
-        pillBtn(p.menu, "+", kAcc2, {p.w - 24, cy}, kSq, menu_selector(XFCPanel::onStepUp), id);
-        m_vals[key] = txt("", 0.4f, kText, {p.w - 72, cy}, p.body, {0.5f, 0.5f}); refreshVal(key);
+        addStepper(p, key, name, menu_selector(XFCPanel::onStepDown), menu_selector(XFCPanel::onStepUp));
     }
     void addPreset(Page& p, const char* key, const char* name, const int* arr, int n) {
-        float cy = beginRow(p, name); int id = (int)m_keys.size(); m_keys.push_back(key); m_presets[key] = {arr, n};
-        pillBtn(p.menu, "-", kAcc2, {p.w - 120, cy}, kSq, menu_selector(XFCPanel::onPresetDown), id);
-        pillBtn(p.menu, "+", kAcc2, {p.w - 24, cy}, kSq, menu_selector(XFCPanel::onPresetUp), id);
-        m_vals[key] = txt("", 0.4f, kText, {p.w - 72, cy}, p.body, {0.5f, 0.5f}); refreshVal(key);
+        m_presets[key] = {arr, n};
+        addStepper(p, key, name, menu_selector(XFCPanel::onPresetDown), menu_selector(XFCPanel::onPresetUp));
     }
     void addButtonRow(Page& p, const char* name, const char* btn, ccColor3B col, SEL_MenuHandler cb) {
-        float cy = beginRow(p, name);
-        pillBtn(p.menu, btn, col, {p.w - 12 - 62, cy}, 124, cb);
+        int r = beginRow(p, name); float cy = rowCY(p, r);
+        keep(p, r, pillBtn(p.menu, btn, col, {p.w - 12 - 62, cy}, 124, cb));
     }
     void refreshVal(const std::string& key) {
         auto it = m_vals.find(key); if (it == m_vals.end()) return;
@@ -192,32 +281,34 @@ protected:
         m_bgSprite->setVisible(false);
         if (m_closeBtn) { m_closeBtn->setVisible(false); m_closeBtn->setEnabled(false); }
 
-        auto shadow = rrect(W + 8, H + 8, 20, {0, 0, 0}, 0.45f); shadow->setPosition({-4, -4}); m_mainLayer->addChild(shadow, -2);
-        auto panel = rrect(W, H, 18, kBg, 1.f, kBorder, 1.6f); m_mainLayer->addChild(panel, -1);
-        auto side = rrect(SW, H - 16, 14, kSide); side->setPosition({8, 8}); m_mainLayer->addChild(side, 0);
+        auto shadow = rrect(W + 8, H + 8, 20, {0, 0, 0}, 0.5f); shadow->setPosition({-4, -4}); m_mainLayer->addChild(shadow, -2);
+        auto panel = rrect(W, H, 18, kBg, 1.f, kBorder, 1.8f); m_mainLayer->addChild(panel, -1);
+        auto side = rrect(SW, H - 16, 14, kSide, 1.f, kRowHi, 0.8f); side->setPosition({8, 8}); m_mainLayer->addChild(side, 0);
+        auto glow = rrect(W - 24, 2.f, 1.f, kAcc, 0.55f); glow->setPosition({12, H - 3.f}); m_mainLayer->addChild(glow, 1);   // thin accent line on top
 
         // header
-        if (auto ic = CCSprite::create("xfc-circle.png"_spr)) {
-            ic->setScale(34.f / std::max(1.f, std::max(ic->getContentWidth(), ic->getContentHeight())));
-            ic->setPosition({8 + 28.f, H - 34.f}); m_mainLayer->addChild(ic, 2);
-        }
+        icon("xfc-circle.png"_spr, 36.f, {8 + 28.f, H - 34.f}, m_mainLayer);
         txt("XFC", 0.52f, kText, {8 + 52.f, H - 29.f}, m_mainLayer, {0.f, 0.5f}, 70.f);
         txt("Frame Counter", 0.26f, kDim, {8 + 52.f, H - 44.f}, m_mainLayer, {0.f, 0.5f}, 74.f);
         txt(fmt::format("by LNTB017  {}", Mod::get()->getVersion().toVString()), 0.23f, kDim, {8 + SW / 2, 20.f}, m_mainLayer, {0.5f, 0.5f}, SW - 16.f);
 
-        // tabs
+        // tabs (picture + name)
         const char* names[NTABS] = {"Macros", "Analysis", "Visuals", "Colours", "Speed", "xdBot", "Settings"};
-        auto tm = CCMenu::create(); tm->setPosition(0, 0); m_mainLayer->addChild(tm, 3);
+        m_tabMenu = CCMenu::create(); m_tabMenu->setPosition(0, 0); m_mainLayer->addChild(m_tabMenu, 3);
         for (int i = 0; i < NTABS; i++) {
             auto n = CCNode::create(); n->setContentSize({SW - 20, kTabH});
-            m_tabHi[i] = rrect(SW - 20, kTabH, 9, kRowHi); n->addChild(m_tabHi[i]); m_tabHi[i]->setVisible(false);
-            m_tabLbl[i] = txt(names[i], 0.4f, kDim, {14, kTabH / 2}, n, {0.f, 0.5f}, SW - 44.f);
+            m_tabHi[i] = rrect(SW - 20, kTabH, 9, kRowHi, 1.f, kAcc, 1.f); n->addChild(m_tabHi[i]); m_tabHi[i]->setVisible(false);
+            std::string pic;
+            if (i == 0) pic = "xfc-circle.png"_spr; else if (i == 1) pic = "xfc-analyze.png"_spr; else if (i == 6) pic = "xfc-settings.png"_spr;
+            if (!pic.empty()) icon(pic, 17.f, {16.f, kTabH / 2}, n);
+            else tabIcon(i, n, {16.f, kTabH / 2}, kAcc2);
+            m_tabLbl[i] = txt(names[i], 0.4f, kDim, {32, kTabH / 2}, n, {0.f, 0.5f}, SW - 58.f);
             auto b = CCMenuItemSpriteExtra::create(n, nullptr, this, menu_selector(XFCPanel::onTab));
-            b->setTag(i); b->setPosition({8 + SW / 2, H - 80.f - i * 28.f}); tm->addChild(b);
+            b->setTag(i); b->setPosition({8 + SW / 2, H - 80.f - i * 28.f}); m_tabMenu->addChild(b);
         }
 
-        // title row + close
-        m_title = txt("", 0.62f, kText, {CX, H - 26.f}, m_mainLayer, {0.f, 0.5f}, CW - 40.f);
+        // title row + scroll arrows + close
+        m_title = txt("", 0.62f, kText, {CX, H - 26.f}, m_mainLayer, {0.f, 0.5f}, CW - 150.f);
         auto top = CCMenu::create(); top->setPosition(0, 0); m_mainLayer->addChild(top, 30);
         {
             auto n = CCNode::create(); n->setContentSize({kCloseD, kCloseD});
@@ -225,6 +316,16 @@ protected:
             txt("x", 0.5f, kText, {kCloseD / 2, kCloseD / 2 + 0.5f}, n, {0.5f, 0.5f});
             auto b = CCMenuItemSpriteExtra::create(n, nullptr, this, menu_selector(XFCPanel::onCloseBtn));
             b->setPosition({W - 14.f - kCloseD / 2, H - 14.f - kCloseD / 2}); top->addChild(b);
+            for (int dir = 0; dir < 2; dir++) {                       // scroll arrows: a second way to move long pages, besides dragging
+                auto a = CCNode::create(); a->setContentSize({kCloseD, kCloseD});
+                a->addChild(rrect(kCloseD, kCloseD, kCloseD / 2, kBtn, 1.f, kBorder, 1.2f));
+                auto g = CCDrawNode::create(); float m = kCloseD / 2, k = 5.f;
+                CCPoint up[3] = {ccp(m - k, m - k / 2), ccp(m + k, m - k / 2), ccp(m, m + k / 1.2f)};
+                CCPoint dn[3] = {ccp(m - k, m + k / 2), ccp(m + k, m + k / 2), ccp(m, m - k / 1.2f)};
+                g->drawPolygon(dir == 0 ? up : dn, 3, c4(kAcc2), 0, c4(kAcc2, 0)); a->addChild(g);
+                auto ab = CCMenuItemSpriteExtra::create(a, nullptr, this, dir == 0 ? menu_selector(XFCPanel::onScrollUp) : menu_selector(XFCPanel::onScrollDown));
+                ab->setPosition({W - 14.f - kCloseD / 2 - (kCloseD + 8.f) * (dir == 0 ? 2 : 1), H - 14.f - kCloseD / 2}); top->addChild(ab);
+            }
         }
 
         // footer: status + progress
@@ -248,50 +349,77 @@ protected:
         pillBtn(menu, "PLAY", kGood, {R - 153, y}, 50, menu_selector(XFCPanel::onPlay));
         pillBtn(menu, "STOP", kBad, {R - 99, y}, 50, menu_selector(XFCPanel::onStop));
         pillBtn(menu, "ANALYZE", kWarn, {R - 35, y}, 70, menu_selector(XFCPanel::onAnalyze));
+
+        // search bar: type part of a macro name, the list filters while you type
+        float sy = y - 31.f, sw = CW - 78.f;
+        m_search = TextInput::create(sw / 0.85f, "Search macros...", font());
+        m_search->setPosition({CX + sw / 2, sy}); m_search->setScale(0.85f);
+        m_search->setCallback([this](std::string const& v) { m_query = lowerStr(v); queueList(); });
+        m_tabs[0]->addChild(m_search, 4);
+        m_count = txt("", 0.3f, kDim, {R - 2, sy}, m_tabs[0], {1.f, 0.5f}, 70.f);
+
         m_list = CCNode::create(); m_tabs[0]->addChild(m_list);
         fillList();
     }
     void fillList() {
         m_list->removeAllChildren(); m_files = State::get().findMacros();
-        auto p = makePage(m_list, 32.f);
-        if (m_files.empty()) note(p, "No .gdr macros yet - press UPLOAD or put them in the xdBot macros folder");
+        if (!State::get().macro.ok()) State::get().ensureMacro();      // remembered / first macro is loaded by itself
+        makePage(0, m_list, 64.f);
+        auto& p = m_pages[0];
         auto xdDir = State::get().xdbotFolder();
+        size_t shown = 0;
         for (size_t i = 0; i < m_files.size(); i++) {
+            auto name = m_files[i].filename().string();
+            if (!m_query.empty() && lowerStr(name).find(m_query) == std::string::npos) continue;
+            shown++;
             bool cur = m_files[i].string() == State::get().macroPath;
-            float h = kListH, cy = p.y - h / 2;
-            auto bg = rrect(p.w, h, 10, cur ? kRowHi : kRow, 1.f, cur ? kAcc : kRow, cur ? 1.2f : 0.f); bg->setPosition({0, p.y - h}); p.body->addChild(bg);
-            txt(m_files[i].filename().string(), 0.36f, cur ? kText : ccColor3B{208, 208, 232}, {12, cy + 6}, p.body, {0.f, 0.5f}, p.w - 196.f);
+            float h = kListH;
+            int r = newRow(p, h, 5.f); auto node = p.rows[r].node; float cy = rowCY(p, r);
+            node->addChild(rrect(p.w, h, 10, cur ? kRowHi : kRow, 1.f, cur ? kAcc : kRowHi, cur ? 1.4f : 0.8f));
+            txt(name, 0.36f, cur ? kText : ccColor3B{208, 208, 232}, {12, h / 2 + 7}, node, {0.f, 0.5f}, p.w - 200.f);
             bool fromXd = !xdDir.empty() && m_files[i].parent_path() == xdDir;
-            txt(fromXd ? "xdBot folder" : "XFC folder", 0.23f, fromXd ? kWarn : kDim, {12, cy - 9}, p.body, {0.f, 0.5f});
-            pillBtn(p.menu, "LOAD", cur ? kGood : kAcc2, {p.w - 8 - 44 - 4 - 62 - 4 - 23, cy}, 46, menu_selector(XFCPanel::onLoad), (int)i);
-            pillBtn(p.menu, "ANALYZE", kWarn, {p.w - 8 - 44 - 4 - 31, cy}, 62, menu_selector(XFCPanel::onRowAnalyze), (int)i);
-            pillBtn(p.menu, "PLAY", kGood, {p.w - 8 - 22, cy}, 44, menu_selector(XFCPanel::onRowPlay), (int)i);
-            p.y -= h + 5;
+            std::string sub = fromXd ? "xdBot folder" : "XFC folder";
+            ccColor3B subCol = fromXd ? kWarn : kDim;
+            if (cur) {
+                auto& s = State::get();
+                sub = s.windows.empty() ? fmt::format("loaded  -  {} inputs  -  not analysed", s.macro.inputs.size())
+                                        : fmt::format("loaded  -  analysed, {} clicks", s.summary.total);
+                subCol = kGood;
+            }
+            txt(sub, 0.23f, subCol, {12, h / 2 - 9}, node, {0.f, 0.5f}, p.w - 200.f);
+            keep(p, r, pillBtn(p.menu, "LOAD", cur ? kGood : kAcc2, {p.w - 8 - 44 - 4 - 62 - 4 - 23, cy}, 46, menu_selector(XFCPanel::onLoad), (int)i));
+            keep(p, r, pillBtn(p.menu, "ANALYZE", kWarn, {p.w - 8 - 44 - 4 - 31, cy}, 62, menu_selector(XFCPanel::onRowAnalyze), (int)i));
+            keep(p, r, pillBtn(p.menu, "PLAY", kGood, {p.w - 8 - 22, cy}, 44, menu_selector(XFCPanel::onRowPlay), (int)i));
         }
-        endPage(p);
+        if (m_files.empty()) {
+            note(p, "No .gdr macros found.");
+            note(p, "Press UPLOAD, or record one with xdBot (it is found automatically).");
+        } else if (shown == 0) note(p, "No macro matches \"" + m_query + "\"");
+        if (m_count) m_count->setString(m_query.empty() ? fmt::format("{} macros", m_files.size()).c_str() : fmt::format("{}/{}", shown, m_files.size()).c_str());
+        endPage(0);
     }
 
     // ---- ANALYSIS
     void buildAnalysis() {
-        auto p = makePage(m_tabs[1]);
+        makePage(1, m_tabs[1]); auto& p = m_pages[1];
         section(p, "CLICK WINDOWS (frames)");
         float barX = 74, barW = p.w - barX - 52;
         for (int i = (int)kTierCount - 1; i >= 0; i--) {
-            float cy = beginRow(p, "", 22.f);
+            int r = beginRow(p, "", 22.f); auto node = p.rows[r].node; float cy = 11.f;
             auto c = tierColor(i);
-            txt(std::string(kTiers[i].label), 0.36f, c, {12, cy}, p.body, {0.f, 0.5f}, 56.f);
-            auto track = rrect(barW, 6, 3, kBg); track->setPosition({barX, cy - 3}); p.body->addChild(track);
-            m_tierBars[i] = CCLayerColor::create({c.r, c.g, c.b, 255}, 1, 6); m_tierBars[i]->setPosition({barX, cy - 3}); m_tierBars[i]->setScaleX(0.f); p.body->addChild(m_tierBars[i]);
-            m_tierNum[i] = txt("0", 0.36f, c, {p.w - 12, cy}, p.body, {1.f, 0.5f});
+            txt(std::string(kTiers[i].label), 0.36f, c, {12, cy}, node, {0.f, 0.5f}, 56.f);
+            auto track = rrect(barW, 6, 3, kBg); track->setPosition({barX, cy - 3}); node->addChild(track);
+            m_tierBars[i] = CCLayerColor::create({c.r, c.g, c.b, 255}, 1, 6); m_tierBars[i]->setPosition({barX, cy - 3}); m_tierBars[i]->setScaleX(0.f); node->addChild(m_tierBars[i]);
+            m_tierNum[i] = txt("0", 0.36f, c, {p.w - 12, cy}, node, {1.f, 0.5f});
         }
-        p.y -= 4;
-        m_summary = txt("", 0.3f, kDim, {6, p.y - 8}, p.body, {0.f, 0.5f}, p.w - 12); p.y -= 20;
-        endPage(p);
+        int r = newRow(p, 18.f, 2.f);
+        m_summary = txt("", 0.3f, kDim, {6, 9}, p.rows[r].node, {0.f, 0.5f}, p.w - 12);
+        endPage(1);
     }
 
     // ---- VISUALS
     void buildVisuals() {
-        auto p = makePage(m_tabs[2]);
+        makePage(2, m_tabs[2]); auto& p = m_pages[2];
         section(p, "COUNTER");
         addToggle(p, "show-hud", "Show counter");
         addToggle(p, "show-tiers", "Window rows 0-1 ... 15-20");
@@ -306,28 +434,29 @@ protected:
         addToggle(p, "ring-label", "Exact frame on circle");
         addStep(p, "ring-scale", "Circle size");
         addStep(p, "ring-time", "Circle lifetime (0 = stay)");
-        endPage(p);
+        endPage(2);
     }
 
     // ---- COLOURS
     void paintSw(int i) { if (m_sw[i]) { m_sw[i]->clear(); roundInto(m_sw[i], 40, 16, 6, tierColor(i), 1.f, {255, 255, 255}, 1.f); } }
     void buildColors() {
-        auto p = makePage(m_tabs[3]);
+        makePage(3, m_tabs[3]); auto& p = m_pages[3];
         section(p, "ROW COLOURS");
         for (int i = (int)kTierCount - 1; i >= 0; i--) {
-            float cy = beginRow(p, std::string(kTiers[i].label) + " frames", kRowH - 2.f);
-            m_sw[i] = CCDrawNode::create(); m_sw[i]->setPosition({p.w - 138, cy - 8}); p.body->addChild(m_sw[i]); paintSw(i);
-            pillBtn(p.menu, "<", kAcc2, {p.w - 62, cy}, kSq, menu_selector(XFCPanel::onColor), i * 2);
-            pillBtn(p.menu, ">", kAcc2, {p.w - 24, cy}, kSq, menu_selector(XFCPanel::onColor), i * 2 + 1);
+            float h = kRowH - 2.f;
+            int r = beginRow(p, std::string(kTiers[i].label) + " frames", h); float cy = rowCY(p, r);
+            m_sw[i] = CCDrawNode::create(); m_sw[i]->setPosition({p.w - 138, h / 2 - 8}); p.rows[r].node->addChild(m_sw[i]); paintSw(i);
+            keep(p, r, pillBtn(p.menu, "<", kAcc2, {p.w - 62, cy}, kSq, menu_selector(XFCPanel::onColor), i * 2));
+            keep(p, r, pillBtn(p.menu, ">", kAcc2, {p.w - 24, cy}, kSq, menu_selector(XFCPanel::onColor), i * 2 + 1));
         }
         addButtonRow(p, "Back to default colours", "RESET", kWarn, menu_selector(XFCPanel::onColorReset));
         note(p, "Exact RGB: Geode > XFC > Settings");
-        endPage(p);
+        endPage(3);
     }
 
     // ---- SPEED
     void buildSpeed() {
-        auto p = makePage(m_tabs[4]);
+        makePage(4, m_tabs[4]); auto& p = m_pages[4];
         section(p, "PHYSICS (TPS)");
         addToggle(p, "tps-enabled", "Custom TPS");
         addPreset(p, "tps", "TPS", kTpsPresets, (int)std::size(kTpsPresets));
@@ -336,7 +465,7 @@ protected:
         addPreset(p, "fps", "FPS", kFpsPresets, (int)std::size(kFpsPresets));
         note(p, "Macros are recorded at 240 TPS - keep TPS at 240 when playing them.", kWarn);
         note(p, "Analysis always runs at 240 TPS internally, whatever you set here.");
-        endPage(p);
+        endPage(4);
     }
     void preset(CCObject* o, int dir) {
         auto key = m_keys[static_cast<CCNode*>(o)->getTag()]; auto [arr, n] = m_presets[key];
@@ -352,21 +481,21 @@ protected:
 
     // ---- XDBOT
     void buildXdbot() {
-        auto p = makePage(m_tabs[5]);
+        makePage(5, m_tabs[5]); auto& p = m_pages[5];
         section(p, "XDBOT LINK");
-        float cy = beginRow(p, "", kRowH); m_xdInfo = txt("", 0.32f, kText, {12, cy}, p.body, {0.f, 0.5f}, p.w - 24);
+        int r = beginRow(p, "", kRowH); m_xdInfo = txt("", 0.32f, kText, {12, kRowH / 2}, p.rows[r].node, {0.f, 0.5f}, p.w - 24);
         addToggle(p, "link-xdbot", "Sync with xdBot playback");
         addButtonRow(p, "Copy macro into xdBot folder", "SEND", kAcc2, menu_selector(XFCPanel::onSend));
         note(p, "1. Load a .gdr in XFC and ANALYZE it once.");
         note(p, "2. SEND it to xdBot, then in xdBot: Load > Play.");
         note(p, "3. XFC follows the frame counter: rows, circles, frames and ms");
         note(p, "    fire on every analysed click. No xdBot changes needed.");
-        endPage(p);
+        endPage(5);
     }
 
     // ---- SETTINGS
     void buildSettings() {
-        auto p = makePage(m_tabs[6]);
+        makePage(6, m_tabs[6]); auto& p = m_pages[6];
         section(p, "ANALYSIS");
         addStep(p, "max-shift", "Max window searched (f)");
         addStep(p, "horizon", "Survive-check length (f)");
@@ -376,7 +505,7 @@ protected:
         section(p, "MORE");
         addButtonRow(p, "Every setting with exact values", "GEODE", kWarn, menu_selector(XFCPanel::onGeode));
         note(p, "Works in every gamemode and dual: the real game physics are re-simulated.");
-        endPage(p);
+        endPage(6);
     }
 
     // ---------------------------------------------------------------- behaviour
@@ -389,6 +518,7 @@ protected:
             if (t == i && animate) { m_tabs[t]->setPosition(14, 0); m_tabs[t]->runAction(CCEaseExponentialOut::create(CCMoveTo::create(0.28f, {0, 0}))); }
             else if (t == i) m_tabs[t]->setPosition(0, 0);
         }
+        if (m_search) m_search->setEnabled(i == 0);                      // the hidden search box must never catch taps on other tabs
     }
     void onTab(CCObject* o) { showTab(static_cast<CCNode*>(o)->getTag()); }
     void onCloseBtn(CCObject*) { this->onClose(nullptr); }
@@ -396,16 +526,17 @@ protected:
     void queueList() { this->scheduleOnce(schedule_selector(XFCPanel::rebuildList), 0.f); }   // never rebuild a menu from inside its own tap
     void onRefresh(CCObject*) { State::get().status = "Refreshed"; queueList(); }
     void onUpload(CCObject*) {
-        file::FilePickOptions opts; opts.filters.push_back({"GD replay", {"*.gdr"}});
+        file::FilePickOptions opts;                                        // no extension filter: phones often hide .gdr files behind one
         m_pick.bind([this](auto* ev) {
             auto r = ev->getValue(); if (!r || !r->isOk()) return;
             auto src = r->unwrap(); auto& s = State::get();
-            auto ext = src.extension().string();
-            for (auto& c : ext) c = (char)std::tolower((unsigned char)c);
-            if (ext != ".gdr") { s.status = "Only .gdr files are accepted"; return; }
-            auto dst = s.xfcDir() / src.filename();
+            auto name = src.filename().string();
+            if (!endsWithGdr(name)) name += ".gdr";
+            auto dst = s.xfcDir() / name;
             std::error_code ec; std::filesystem::copy_file(src, dst, std::filesystem::copy_options::overwrite_existing, ec);
-            s.loadMacro(dst); queueList();
+            if (ec) { s.status = "Could not copy the file: " + ec.message(); return; }
+            if (!s.loadMacro(dst)) std::filesystem::remove(dst, ec);          // not a macro: do not leave junk in the list
+            queueList();
         });
         m_pick.setFilter(file::pick(file::PickMode::OpenFile, opts));
     }

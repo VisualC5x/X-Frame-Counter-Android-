@@ -207,10 +207,7 @@ inline bool endsWithGdr(std::string path) {
 
 inline Macro loadMacroFile(const std::string& path) {
     Macro m;
-    if (!endsWithGdr(path)) {
-        m.error = "Only .gdr files are accepted";
-        return m;
-    }
+    // The extension is NOT checked here: phones hand over picked files under odd names. The content decides.
     std::ifstream f(path, std::ios::binary);
     if (!f) { m.error = "Cannot open file: " + path; return m; }
     std::vector<uint8_t> buf((std::istreambuf_iterator<char>(f)), {});

@@ -89,6 +89,9 @@ struct State {
     bool simulating = false;            // true while the analyser is stepping the level itself
     bool simDied = false;
     bool simDone = false;               // the simulated run reached the end of the level (counts as "survived")
+    bool stepping = false;              // true only while the analyser itself steps the level (the game's own updates are muted meanwhile)
+    int  simHazard = -1;                // object id of the hazard that ended the last simulated run (diagnostics)
+    double simDieX = 0.0, simDieY = 0.0;
     double simDeathFrac = 0.0;
     float simPrevX = 0.f;
     double simGap = 0.0;
@@ -109,6 +112,8 @@ struct State {
     void saveCache();
     std::filesystem::path cachePath() const;
     std::vector<std::filesystem::path> findMacros();      // xdBot folder + XFC folder
+    bool ensureMacro();                                    // a macro is loaded (auto-loads the remembered / first one)
+    std::string lastMacro() const;
     std::filesystem::path xfcDir();
     void startPlayback();
     void stopPlayback();
