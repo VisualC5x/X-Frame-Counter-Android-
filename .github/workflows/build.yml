@@ -1,0 +1,73 @@
+# Geode mod build for Geometry Dash 2.2074 (Geode SDK v4.10.0)
+# Place this file at: .github/workflows/build.yml  (in the repository root)
+name: Build Geode Mod
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Check version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: mod.json and CMakeLists.txt must agree
+        id: ver
+        run: |
+          v=$(python3 -c "import json;print(json.load(open('mod.json'))['version'])")
+          c=$(sed -n 's/.*project([A-Za-z0-9_]* VERSION \([0-9.]*\)).*/\1/p' CMakeLists.txt | head -1)
+          if [ "v$c" != "$v" ]; then echo "Version mismatch: mod.json=$v CMakeLists.txt=v$c"; exit 1; fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.config.name }}
+    needs: check
+    runs-on: ${{ matrix.config.os }}
+    timeout-minutes: 60
+    continue-on-error: ${{ matrix.config.optional }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - { name: Windows,   os: windows-latest, target: Win64,     optional: false }
+          - { name: Android32, os: ubuntu-latest,  target: Android32, optional: false }
+          - { name: Android64, os: ubuntu-latest,  target: Android64, optional: false }
+          - { name: iOS,       os: macos-latest,   target: iOS,       optional: true }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build with Geode
+        uses: geode-sdk/build-geode-mod@main
+        with:
+          sdk: v4.10.0
+          bindings: geode-sdk/bindings
+          bindings-ref: c949aeae063175eca528b33cf8f5b573935b0079
+          combine: true
+          target: ${{ matrix.config.target }}
+          build-config: Release
+
+  package:
+    name: Package all platforms
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [check, build]
+    if: ${{ !cancelled() && needs.build.result != 'failure' }}
+    steps:
+      - uses: geode-sdk/build-geode-mod/combine@main
+        id: combine
+      - uses: actions/upload-artifact@v4
+        with:
+          name: XFC-${{ needs.check.outputs.version }}-all-platforms
+          path: ${{ steps.combine.outputs.build-output }}/*.geode
+          if-no-files-found: error
+          retention-days: 14
