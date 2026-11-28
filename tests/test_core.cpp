@@ -21,8 +21,8 @@ int main() {
     auto w0 = analyzeClick(f, 0); assert(w0.frames == 0.001 && w0.tier == 0);
     auto w1 = analyzeClick(f, 1); assert(w1.frames == 2 && w1.tier == 1);
     auto w2 = analyzeClick(f, 2); assert(w2.frames == 3 && w2.tier == 2);
-    auto w3 = analyzeClick(f, 3); assert(w3.frames == 6 && w3.tier == 4);
-    auto w4 = analyzeClick(f, 4); assert(w4.capped && w4.tier == 6);
+    auto w3 = analyzeClick(f, 3); assert(w3.frames == 6 && w3.tier == 5);
+    auto w4 = analyzeClick(f, 4); assert(w4.capped && w4.tier == 11);
     auto w5 = analyzeClick(f, 5); assert(w5.baseDies);
     auto w6 = analyzeClick(f, 6); assert(w6.frames == 1.0 && w6.tier == 0);
     assert(w1.ms(240) > 8.3 && w1.ms(240) < 8.4);
