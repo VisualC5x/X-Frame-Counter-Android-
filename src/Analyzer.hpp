@@ -12,15 +12,22 @@ namespace xfc {
 
 struct Tier { double maxFrames; const char* label; uint8_t r, g, b; };
 
-// 7 tiers, tightest -> loosest (max window 30 frames). Colours are defaults; the mod lets users override.
-inline constexpr std::array<Tier, 7> kTiers{{
-    {1.0,  "0.001-1", 255,  45,  60},
-    {2.0,  "2",     255, 140,  30},
-    {3.0,  "3",     255, 225,  40},
-    {5.0,  "4-5",    80, 230,  90},
-    {8.0,  "6-8",    40, 220, 255},
-    {15.0, "9-15",   50, 130, 255},
-    {30.0, "16-30", 170,  90, 255},
+// 12 buckets, tightest -> loosest. A window of w frames lands in the first bucket with w <= maxFrames
+// (0-1 also holds every sub-frame window). Colours are defaults; the mod lets users override them.
+inline constexpr size_t kTierCount = 12;
+inline constexpr std::array<Tier, kTierCount> kTiers{{
+    {1.0,  "0-1",   255,  70,  80},
+    {2.0,  "1-2",   255, 115, 115},
+    {3.0,  "2-3",   255, 160,  80},
+    {4.0,  "3-4",   255, 215,  90},
+    {5.0,  "4-5",   170, 235, 100},
+    {6.0,  "5-6",    90, 230, 130},
+    {7.0,  "6-7",    80, 225, 225},
+    {8.0,  "7-8",    80, 160, 255},
+    {9.0,  "8-9",   110, 125, 255},
+    {10.0, "9-10",  160, 110, 255},
+    {15.0, "10-15", 200, 120, 255},
+    {20.0, "15-20", 255, 130, 230},
 }};
 
 inline int tierFor(double frames) {
@@ -83,7 +90,7 @@ inline Window analyzeClick(Backend& b, size_t idx, int maxShift = 30) {
 }
 
 struct Summary {
-    std::array<int, 7> perTier{};
+    std::array<int, kTierCount> perTier{};
     int total = 0;
     double tightest = 1e9;
 };
